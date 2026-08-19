@@ -1,6 +1,16 @@
 # FMCG Decision Intelligence Platform
 
-[![Live App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://fmcg-decision-intelligence.streamlit.app/)
+## Live Application
+
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://fmcg-decision-intelligence.streamlit.app/)
+
+### Executive Overview
+
+![Executive Overview](screenshots/executive_overview.jpeg)
+
+### SKU Decision Centre
+
+![SKU Decision Centre](screenshots/sku_decision_centre.jpeg)
 
 An end-to-end machine learning and decision intelligence platform for **FMCG demand forecasting, inventory optimisation and operational decision support**.
 
