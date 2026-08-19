@@ -1,0 +1,3 @@
+policy,service_level,lost_sales,stockout_rows,average_inventory,revenue
+Baseline,93.53832259123938,1574,94,85.26322580645162,3774469.35
+Forecast-Driven,99.81115809351779,46,10,59.85032258064516,4022352.05
