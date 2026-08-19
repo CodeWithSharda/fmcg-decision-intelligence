@@ -129,13 +129,17 @@ for date in dates:
 
             discount_pct = np.random.choice([5, 10, 15, 20]) if is_promotion else 0
 
+            selling_price = round(
+            product["base_price"] * (1 - discount_pct / 100),
+            2
+            )
             # Bigger discounts create a larger increase in demand
             discount_factor = 1 + (discount_pct / 100) * 1.5
 
             average_demand = average_demand * discount_factor
 
             units_sold = np.random.poisson(average_demand)
-
+            revenue = round(units_sold * selling_price, 2)
             sales_records.append({
                 "date": date,
                 "day_of_week": date.day_name(),
@@ -145,13 +149,18 @@ for date in dates:
                 "sku_id": product["sku_id"],
                 "product_name": product["product_name"],
                 "category": product["category"],
+                "base_price": product["base_price"],
                 "promotion": is_promotion,
                 "discount_pct": discount_pct,
-                "units_sold": units_sold
+                "selling_price": selling_price,
+                "units_sold": units_sold,
+                "revenue": revenue
             })
 
 # Convert all sales records into a DataFrame
 sales_df = pd.DataFrame(sales_records)
+
+sales_df.to_csv("data/processed/fmcg_sales.csv", index=False)
 
 print("\nSALES DATA PREVIEW")
 print(sales_df.head(10))
