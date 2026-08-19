@@ -885,7 +885,7 @@ with overview_tab:
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch"
     )
 
     # -----------------------------------------------------
@@ -915,7 +915,7 @@ with overview_tab:
 
     col1.plotly_chart(
         city_fig,
-        use_container_width=True
+        width="stretch"
     )
 
     category_sales = (
@@ -936,7 +936,7 @@ with overview_tab:
 
     col2.plotly_chart(
         category_fig,
-        use_container_width=True
+        width="stretch"
     )
 
 
@@ -1073,7 +1073,7 @@ with forecast_tab:
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch"
     )
 
     # -----------------------------------------------------
@@ -1093,7 +1093,7 @@ with forecast_tab:
 
     st.plotly_chart(
         error_fig,
-        use_container_width=True
+        width="stretch"
     )
 
 
@@ -1133,7 +1133,7 @@ with inventory_tab:
 
     col1.plotly_chart(
         service_fig,
-        use_container_width=True
+        width="stretch"
     )
 
     inventory_fig = px.bar(
@@ -1150,7 +1150,7 @@ with inventory_tab:
 
     col2.plotly_chart(
         inventory_fig,
-        use_container_width=True
+        width="stretch"
     )
 
     # -----------------------------------------------------
@@ -1188,7 +1188,7 @@ with inventory_tab:
 
     st.plotly_chart(
         impact_fig,
-        use_container_width=True
+        width="stretch"
     )
 
     # -----------------------------------------------------
@@ -1230,7 +1230,7 @@ with inventory_tab:
 
     st.plotly_chart(
         policy_fig,
-        use_container_width=True
+        width="stretch"
     )
 
 
@@ -1546,7 +1546,7 @@ with decision_tab:
 
         st.dataframe(
             display_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
 # =========================================================
