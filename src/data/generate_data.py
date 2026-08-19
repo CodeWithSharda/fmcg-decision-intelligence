@@ -103,6 +103,21 @@ base_demand = {
 # Empty list where all sales records will be stored
 sales_records = []
 
+# Track inventory separately for each store and product
+inventory_levels = {}
+
+for store in stores:
+    for product in products:
+
+        key = (store["store_id"], product["sku_id"])
+
+        starting_inventory = int(
+            base_demand[product["sku_id"]]
+            * store["demand_factor"]
+            * 14
+        )
+
+        inventory_levels[key] = starting_inventory
 # Go through every date
 for date in dates:
 
@@ -138,7 +153,46 @@ for date in dates:
 
             average_demand = average_demand * discount_factor
 
-            units_sold = np.random.poisson(average_demand)
+            # Identify this store-product inventory
+            key = (store["store_id"], product["sku_id"])
+
+            # Replenishment happens every Monday
+            replenishment_qty = 0
+
+            if date.dayofweek == 0:
+
+                target_inventory = int(
+                    base_demand[product["sku_id"]]
+                    * store["demand_factor"]
+                    * 7
+                )
+
+                replenishment_qty = max(
+                    target_inventory - inventory_levels[key],
+                    0
+                )
+
+                inventory_levels[key] += replenishment_qty
+
+            # Inventory available at the beginning of the day
+            opening_inventory = inventory_levels[key]
+
+            # Customer demand for the day
+            customer_demand = np.random.poisson(average_demand)
+
+            # Actual sales cannot exceed available inventory
+            units_sold = min(customer_demand, opening_inventory)
+
+            # Demand we could not fulfil because stock was unavailable
+            lost_sales = max(customer_demand - opening_inventory, 0)
+            stockout_flag = lost_sales > 0
+
+            # Remaining stock after today's sales
+            ending_inventory = opening_inventory - units_sold
+
+            # Update inventory for the next day
+            inventory_levels[key] = ending_inventory
+
             revenue = round(units_sold * selling_price, 2)
             sales_records.append({
                 "date": date,
@@ -153,7 +207,13 @@ for date in dates:
                 "promotion": is_promotion,
                 "discount_pct": discount_pct,
                 "selling_price": selling_price,
+                "customer_demand": customer_demand,
+                "opening_inventory": opening_inventory,
+                "replenishment_qty": replenishment_qty,
                 "units_sold": units_sold,
+                "lost_sales": lost_sales,
+                "stockout_flag": stockout_flag,
+                "ending_inventory": ending_inventory,
                 "revenue": revenue
             })
 
@@ -166,3 +226,9 @@ print("\nSALES DATA PREVIEW")
 print(sales_df.head(10))
 
 print("\nTotal sales rows:", len(sales_df))
+
+print("\nINVENTORY CHECK")
+print("Total units replenished:", sales_df["replenishment_qty"].sum())
+print("Total lost sales:", sales_df["lost_sales"].sum())
+print("Rows with lost sales:", (sales_df["lost_sales"] > 0).sum())
+print("Lowest ending inventory:", sales_df["ending_inventory"].min())
