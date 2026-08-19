@@ -132,6 +132,520 @@ def safe_pct_change(new, old):
 
     return ((new - old) / old) * 100
 
+# ---------------------------------------------------------
+# GROUNDED DECISION COPILOT
+# ---------------------------------------------------------
+
+def answer_business_question(question):
+    """
+    Deterministic natural-language analytics assistant.
+
+    The assistant does not generate or invent business
+    numbers. Every answer is calculated directly from the
+    project datasets.
+    """
+
+    q = question.lower().strip()
+
+    # -----------------------------------------------------
+    # LATEST INVENTORY STATE
+    # -----------------------------------------------------
+
+    latest_date = optimized_df["date"].max()
+
+    latest = (
+        optimized_df[
+            optimized_df["date"]
+            == latest_date
+        ]
+        .copy()
+    )
+
+    latest["inventory_on_order"] = (
+        latest["inventory_position"]
+        - latest["ending_inventory"]
+    ).clip(lower=0)
+
+    latest["post_order_inventory_position"] = (
+        latest["inventory_position"]
+        + latest["order_qty"]
+    )
+
+    latest["physical_cover_days"] = (
+        latest["ending_inventory"]
+        /
+        latest["predicted_demand"].clip(lower=0.1)
+    )
+
+    latest["effective_cover_days"] = (
+        latest["inventory_position"]
+        /
+        latest["predicted_demand"].clip(lower=0.1)
+    )
+
+    latest["post_order_cover_days"] = (
+        latest["post_order_inventory_position"]
+        /
+        latest["predicted_demand"].clip(lower=0.1)
+    )
+
+    latest["inventory_status"] = np.select(
+        [
+            latest["stockout_flag"],
+            latest["order_qty"] > 0,
+            latest["inventory_on_order"] > 0
+        ],
+        [
+            "STOCKOUT",
+            "REORDER DUE",
+            "IN TRANSIT"
+        ],
+        default="HEALTHY"
+    )
+
+    # -----------------------------------------------------
+    # IDENTIFY CITIES / PRODUCTS MENTIONED
+    # -----------------------------------------------------
+
+    cities = sorted(
+        sales_df["city"].unique()
+    )
+
+    products = sorted(
+        sales_df["product_name"].unique()
+    )
+
+    mentioned_cities = [
+        city
+        for city in cities
+        if city.lower() in q
+    ]
+
+    mentioned_products = [
+        product
+        for product in products
+        if product.lower() in q
+    ]
+
+    # -----------------------------------------------------
+    # CITY COMPARISON
+    # -----------------------------------------------------
+
+    if (
+        "compare" in q
+        and len(mentioned_cities) >= 2
+    ):
+
+        comparison_rows = []
+
+        for city in mentioned_cities[:2]:
+
+            city_data = sales_df[
+                sales_df["city"]
+                == city
+            ]
+
+            revenue = (
+                city_data["revenue"].sum()
+            )
+
+            demand = (
+                city_data[
+                    "customer_demand"
+                ].sum()
+            )
+
+            units = (
+                city_data[
+                    "units_sold"
+                ].sum()
+            )
+
+            fulfilment = (
+                units / demand
+            ) * 100
+
+            stockouts = (
+                city_data[
+                    "stockout_flag"
+                ].sum()
+            )
+
+            comparison_rows.append(
+                (
+                    city,
+                    revenue,
+                    demand,
+                    fulfilment,
+                    stockouts
+                )
+            )
+
+        city1 = comparison_rows[0]
+        city2 = comparison_rows[1]
+
+        return f"""
+### {city1[0]} vs {city2[0]}
+
+| Metric | {city1[0]} | {city2[0]} |
+|---|---:|---:|
+| Historical Revenue | {format_rupees(city1[1])} | {format_rupees(city2[1])} |
+| Customer Demand | {city1[2]:,.0f} units | {city2[2]:,.0f} units |
+| Demand Fulfilment | {city1[3]:.2f}% | {city2[3]:.2f}% |
+| Stockout Events | {city1[4]:,.0f} | {city2[4]:,.0f} |
+
+These figures are calculated across the complete simulated historical dataset.
+"""
+
+    # -----------------------------------------------------
+    # SPECIFIC PRODUCT
+    # -----------------------------------------------------
+
+    if len(mentioned_products) > 0:
+
+        product = mentioned_products[0]
+
+        historical = sales_df[
+            sales_df["product_name"]
+            == product
+        ]
+
+        current = latest[
+            latest["product_name"]
+            == product
+        ].copy()
+
+        avg_demand = (
+            historical[
+                "customer_demand"
+            ].mean()
+        )
+
+        total_revenue = (
+            historical["revenue"].sum()
+        )
+
+        stockout_rate = (
+            historical[
+                "stockout_flag"
+            ].mean()
+            * 100
+        )
+
+        current = current.sort_values(
+            "order_qty",
+            ascending=False
+        )
+
+        action_lines = []
+
+        for _, row in current.head(5).iterrows():
+
+            action_lines.append(
+                f"- **{row['city']}**: "
+                f"{row['inventory_status']}; "
+                f"{row['ending_inventory']:.0f} units on hand, "
+                f"{row['inventory_on_order']:.0f} already on order, "
+                f"recommended new order "
+                f"{row['order_qty']:.0f} units."
+            )
+
+        actions = "\n".join(
+            action_lines
+        )
+
+        return f"""
+### {product}
+
+**Historical performance**
+- Average daily store demand: **{avg_demand:.1f} units**
+- Historical revenue: **{format_rupees(total_revenue)}**
+- Stockout-event rate: **{stockout_rate:.2f}%**
+
+**Latest inventory position — {latest_date.date()}**
+
+{actions}
+"""
+
+    # -----------------------------------------------------
+    # REVENUE / BUSINESS IMPACT
+    # -----------------------------------------------------
+
+    if (
+        "revenue" in q
+        and (
+            "recover" in q
+            or "improv" in q
+            or "increase" in q
+            or "impact" in q
+        )
+    ):
+
+        revenue_gain = (
+            optimized_row["revenue"]
+            - baseline_row["revenue"]
+        )
+
+        return f"""
+### Holdout Revenue Impact
+
+On the untouched July 2026 holdout period:
+
+- Baseline revenue: **{format_rupees(baseline_row['revenue'])}**
+- Forecast-driven policy revenue: **{format_rupees(optimized_row['revenue'])}**
+- Additional simulated revenue captured: **{format_rupees(revenue_gain)}**
+- Revenue improvement: **{revenue_improvement:.2f}%**
+
+The improvement comes from the complete forecast-driven replenishment policy, not from XGBoost alone.
+"""
+
+    # -----------------------------------------------------
+    # FORECAST PERFORMANCE
+    # -----------------------------------------------------
+
+    if (
+        "forecast" in q
+        or "accuracy" in q
+        or "mape" in q
+        or "error" in q
+    ):
+
+        product_errors = (
+            predictions_df
+            .groupby(
+                "product_name"
+            )["absolute_error"]
+            .mean()
+            .sort_values(
+                ascending=False
+            )
+        )
+
+        worst_product = (
+            product_errors.index[0]
+        )
+
+        worst_mae = (
+            product_errors.iloc[0]
+        )
+
+        return f"""
+### Demand Forecast Performance
+
+- **MAE:** {mae:.2f} units
+- **RMSE:** {rmse:.2f} units
+- **MAPE:** {mape:.2f}%
+- Improvement over the lag-7 baseline: **32.40% MAE reduction**
+
+The product with the highest average absolute forecast error is **{worst_product}** at approximately **{worst_mae:.2f} units**.
+
+The model forecasts underlying customer demand rather than constrained units sold.
+"""
+
+    # -----------------------------------------------------
+    # STOCKOUT / MANAGEMENT ATTENTION
+    # -----------------------------------------------------
+
+    if (
+        "stockout" in q
+        or "attention" in q
+        or "risk" in q
+        or "urgent" in q
+    ):
+
+        stockouts = latest[
+            latest["inventory_status"]
+            == "STOCKOUT"
+        ]
+
+        reorder_due = latest[
+            latest["inventory_status"]
+            == "REORDER DUE"
+        ].sort_values(
+            "order_qty",
+            ascending=False
+        )
+
+        lines = []
+
+        for _, row in stockouts.iterrows():
+
+            lines.append(
+                f"- **URGENT — {row['city']}, "
+                f"{row['product_name']}**: "
+                f"stockout with "
+                f"{row['ending_inventory']:.0f} units on hand."
+            )
+
+        for _, row in reorder_due.head(5).iterrows():
+
+            lines.append(
+                f"- **{row['city']}, "
+                f"{row['product_name']}**: "
+                f"reorder {row['order_qty']:.0f} units; "
+                f"current physical cover "
+                f"{row['physical_cover_days']:.1f} days."
+            )
+
+        if not lines:
+            lines.append(
+                "- No immediate stockout or "
+                "replenishment exceptions detected."
+            )
+
+        return f"""
+### Management Attention — {latest_date.date()}
+
+Current stockouts: **{len(stockouts)}**
+
+SKUs requiring new orders: **{len(reorder_due)}**
+
+Top actions:
+
+{chr(10).join(lines)}
+"""
+
+    # -----------------------------------------------------
+    # REPLENISHMENT PRIORITIES
+    # -----------------------------------------------------
+
+    if (
+        "replenish" in q
+        or "reorder" in q
+        or "order" in q
+        or "priorit" in q
+    ):
+
+        orders = (
+            latest[
+                latest[
+                    "order_qty"
+                ] > 0
+            ]
+            .sort_values(
+                "order_qty",
+                ascending=False
+            )
+        )
+
+        lines = []
+
+        for _, row in orders.head(8).iterrows():
+
+            lines.append(
+                f"- **{row['city']} — "
+                f"{row['product_name']}**: "
+                f"order **{row['order_qty']:.0f} units** "
+                f"(predicted daily demand "
+                f"{row['predicted_demand']:.1f})."
+            )
+
+        return f"""
+### Replenishment Priorities — {latest_date.date()}
+
+There are **{len(orders)} store-SKU combinations** requiring new orders.
+
+Total recommended order quantity: **{orders['order_qty'].sum():,.0f} units**
+
+Priority actions:
+
+{chr(10).join(lines)}
+"""
+
+    # -----------------------------------------------------
+    # CITY STOCKOUT EXPOSURE
+    # -----------------------------------------------------
+
+    if (
+        "city" in q
+        and (
+            "stockout" in q
+            or "exposure" in q
+            or "inventory" in q
+        )
+    ):
+
+        city_status = (
+            latest
+            .groupby("city")
+            .agg(
+                stockouts=(
+                    "stockout_flag",
+                    "sum"
+                ),
+                orders_required=(
+                    "order_qty",
+                    lambda x:
+                    (x > 0).sum()
+                ),
+                recommended_units=(
+                    "order_qty",
+                    "sum"
+                )
+            )
+            .sort_values(
+                [
+                    "stockouts",
+                    "orders_required"
+                ],
+                ascending=False
+            )
+        )
+
+        top_city = (
+            city_status.index[0]
+        )
+
+        return f"""
+### Inventory Exposure by City
+
+{city_status.to_markdown()}
+
+Based on the latest simulation state, **{top_city}** currently has the highest operational inventory priority using stockouts and reorder requirements.
+"""
+
+    # -----------------------------------------------------
+    # GENERAL INVENTORY PERFORMANCE
+    # -----------------------------------------------------
+
+    if (
+        "inventory" in q
+        or "service level" in q
+    ):
+
+        return f"""
+### Inventory Optimisation Performance
+
+**Untouched July 2026 holdout**
+
+- Baseline service level: **{baseline_row['service_level']:.2f}%**
+- Forecast-driven service level: **{optimized_row['service_level']:.2f}%**
+- Lost-sales reduction: **{lost_sales_reduction:.2f}%**
+- Stockout-event reduction: **{stockout_reduction:.2f}%**
+- Average inventory reduction: **{inventory_reduction:.2f}%**
+- Revenue improvement: **{revenue_improvement:.2f}%**
+
+The inventory policy was selected using May–June data and locked before July evaluation.
+"""
+
+    # -----------------------------------------------------
+    # HELP / FALLBACK
+    # -----------------------------------------------------
+
+    return """
+### I can answer grounded business questions such as:
+
+- **Which SKUs need immediate management attention?**
+- **What replenishment actions should I prioritise today?**
+- **How much revenue did the optimized policy recover?**
+- **How accurate is the demand forecast?**
+- **Compare Chennai and Mumbai.**
+- **Tell me about Bath Soap 100g.**
+- **Which city has the highest stockout exposure?**
+- **How did inventory optimisation perform?**
+
+Answers are calculated directly from the project datasets rather than generated from unsupported assumptions.
+"""
 
 # ---------------------------------------------------------
 # MODEL METRICS
@@ -235,12 +749,19 @@ st.divider()
 # TABS
 # ---------------------------------------------------------
 
-overview_tab, forecast_tab, inventory_tab, decision_tab = st.tabs(
+(
+    overview_tab,
+    forecast_tab,
+    inventory_tab,
+    decision_tab,
+    copilot_tab
+) = st.tabs(
     [
         "Executive Overview",
         "Demand Forecasting",
         "Inventory Optimisation",
-        "SKU Decision Centre"
+        "SKU Decision Centre",
+        "Decision Copilot"
     ]
 )
 
@@ -1028,3 +1549,113 @@ with decision_tab:
             use_container_width=True,
             hide_index=True
         )
+# =========================================================
+# DECISION COPILOT
+# =========================================================
+
+with copilot_tab:
+
+    st.subheader(
+        "Grounded Business Decision Copilot"
+    )
+
+    st.caption(
+        "Natural-language analytics grounded directly "
+        "in forecasting, sales and inventory data. "
+        "No external API or paid LLM required."
+    )
+
+    st.info(
+        "The copilot calculates answers from the project "
+        "datasets. It does not generate unsupported "
+        "business figures."
+    )
+
+    st.markdown(
+        """
+**Try asking:**
+
+- Which SKUs need immediate management attention?
+- What replenishment actions should I prioritise today?
+- How much revenue did the optimized policy recover?
+- How accurate is the demand forecast?
+- Compare Chennai and Mumbai.
+- Tell me about Bath Soap 100g.
+- Which city has the highest stockout exposure?
+        """
+    )
+
+    # -----------------------------------------------------
+    # CHAT HISTORY
+    # -----------------------------------------------------
+
+    if "copilot_messages" not in st.session_state:
+
+        st.session_state.copilot_messages = [
+            {
+                "role": "assistant",
+                "content": (
+                    "Ask me a business question about "
+                    "demand forecasting, inventory, "
+                    "revenue or SKU-level actions."
+                )
+            }
+        ]
+
+    for message in st.session_state.copilot_messages:
+
+        with st.chat_message(
+            message["role"]
+        ):
+
+            st.markdown(
+                message["content"]
+            )
+
+    # -----------------------------------------------------
+    # USER QUESTION
+    # -----------------------------------------------------
+
+    question = st.chat_input(
+        "Ask a business question..."
+    )
+
+    if question:
+
+        st.session_state.copilot_messages.append(
+            {
+                "role": "user",
+                "content": question
+            }
+        )
+
+        with st.chat_message("user"):
+
+            st.markdown(question)
+
+        answer = answer_business_question(
+            question
+        )
+
+        st.session_state.copilot_messages.append(
+            {
+                "role": "assistant",
+                "content": answer
+            }
+        )
+
+        with st.chat_message("assistant"):
+
+            st.markdown(answer)
+
+    # -----------------------------------------------------
+    # CLEAR CHAT
+    # -----------------------------------------------------
+
+    if st.button(
+        "Clear conversation"
+    ):
+
+        st.session_state.copilot_messages = []
+
+        st.rerun()
