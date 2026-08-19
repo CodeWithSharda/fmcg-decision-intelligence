@@ -1,5 +1,7 @@
 # FMCG Decision Intelligence Platform
 
+[![Live App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://fmcg-decision-intelligence.streamlit.app/)
+
 An end-to-end machine learning and decision intelligence platform for **FMCG demand forecasting, inventory optimisation and operational decision support**.
 
 The project combines time-series feature engineering, XGBoost demand forecasting, lead-time-aware inventory simulation, policy optimisation, interactive analytics and a grounded business decision copilot.
